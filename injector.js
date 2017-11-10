@@ -4,6 +4,7 @@ const STATE = {
 }
 
 const SELECTOR = {
+    UNIQUENESS_CUE: 'head title',
     BUTTON_RACK: 'div.ytp-chrome-controls > div.ytp-left-controls',
     VIDEO: 'video.html5-main-video',
     PLAY_BUTTON: 'button.ytp-play-button'
@@ -15,35 +16,97 @@ const iconPrototype = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http
 
 class LoopButton {
     constructor() {
+        console.log('loop button loaded!');
         // set initial state
         this.state = STATE.IDLE
+        this.URI = ''
 
         // query all needed DOM
         this.DOMObj = {
-            'buttonRack': document.querySelector(SELECTOR.BUTTON_RACK),
-            'playButton': document.querySelector(SELECTOR.PLAY_BUTTON),
-            'video': document.querySelector(SELECTOR.VIDEO)
+            'head': document.querySelector(SELECTOR.UNIQUENESS_CUE),
+            'buttonRack': null,
+            'playButton': null,
+            'video': null
         }
 
-        // create the loop button
+        // add observer to uniqueness cue
+        let observer = new MutationObserver((mutations) => {
+            this.pageChangeHandler()
+        })
+
+        observer.observe(this.DOMObj.head, {
+            attributes: true,
+            childList: true,
+            characterData: true
+        })
+    }
+
+    pageChangeHandler() {
+        // get current uri
+        let currentURI = window.location.href
+        console.log('page changed!', currentURI);
+
+        // check changes of URI
+        if (this.URI == currentURI) return;
+        this.URI = currentURI
+
+        // check if on watch page
+        if (!/(^https?:\/\/)?(www\.)?youtube.com\/watch.+/.test(currentURI)) return // do nothing if not on watch page
+
+        // set to idle at first
+        if (this.DOMObj.loopButton) {
+            console.log('setting to idle');
+            this.setState(STATE.IDLE)
+        } else {
+
+            // query all needed DOM
+            this.DOMObj.buttonRack = document.querySelector(SELECTOR.BUTTON_RACK)
+            this.DOMObj.playButton = document.querySelector(SELECTOR.PLAY_BUTTON)
+            this.DOMObj.video = document.querySelector(SELECTOR.VIDEO)
+
+            if (this.DOMObj.buttonRack && this.DOMObj.playButton && this.DOMObj.video) {
+                this.placeButton()
+            } else {
+                console.error('loop-button-for-youtube : query resulted in nothing. aborting placement. please file an issue: https://github.com/shrotavre/youtube-loop');
+            }
+        }
+    }
+
+    placeButton() {
+        console.log('placing button');
         let loopButton = document.createElement('button')
-        loopButton.innerHTML = iconPrototype;
-        loopButton.classList.add(...LOOP_BUTTON_CLASSNAMES);
-        this.DOMObj.buttonRack.insertBefore(loopButton, this.DOMObj.playButton.nextSibling);
+
+        loopButton.innerHTML = iconPrototype
+        loopButton.classList.add(...LOOP_BUTTON_CLASSNAMES)
+        this.DOMObj.buttonRack.insertBefore(loopButton, this.DOMObj.playButton.nextSibling)
         loopButton.addEventListener('click', this.buttonClickHandler.bind(this))
 
-        this.DOMObj.loopButton = loopButton;
+        this.DOMObj.loopButton = loopButton
     }
 
     buttonClickHandler(event) {
-        console.log('youtube-loop-button:', 'button clicked', this.state)
+        console.log('youtube-loop-button:', 'button clicked at', this.state)
+
+        // toggles
         switch (this.state) {
+            case STATE.ACTIVE:
+                this.setState(STATE.IDLE)
+                break
             case STATE.IDLE:
+                this.setState(STATE.ACTIVE)
+                break
+        }
+    }
+
+    // helpers
+    setState(state) {
+        switch (state) {
+            case STATE.ACTIVE:
                 this.state = STATE.ACTIVE
                 this.DOMObj.loopButton.querySelector('svg path').classList.remove('ytp-svg-fill')
                 this.DOMObj.video.loop = true
                 break
-            case STATE.ACTIVE:
+            case STATE.IDLE:
                 this.state = STATE.IDLE
                 this.DOMObj.loopButton.querySelector('svg path').classList.add('ytp-svg-fill')
                 this.DOMObj.video.loop = false
